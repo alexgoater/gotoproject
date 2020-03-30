@@ -1,0 +1,180 @@
+import numpy as np
+import matplotlib.pyplot as plt
+np.set_printoptions(suppress=True)
+
+
+
+
+#Create functions.
+
+def make_lightcurve(t, mod):
+    mag = np.zeros(len(t))
+    for ind,i in enumerate(t):
+        a = np.interp(i, model[mod][:,0], model[mod][:,1])
+        mag[ind] = a
+    return(mag)
+
+def make_scale_model(mag, rand_dist_range):
+    mag_scale=[]
+    for i in range(len(rand_dist_range)):
+        obs = mag + 5*np.log10((rand_dist_range[i])/(dist_all_models))
+        mag_scale.append(obs)
+    return(mag_scale)
+
+def introduce_telescope_err(mag_scale):
+    corrected_mags = []
+    rand_err = np.random.uniform(-0.25, 0.25, len(mag_scale[0]))
+    for mags in mag_scale:
+        corrected_mags.append(mags + rand_err)
+        
+    
+    cutoff_mag = [21]#*len(corrected_mags[0])
+    print(len(corrected_mags[0]))
+    for elem in corrected_mags:
+        for j in range(len(corrected_mags)):
+            if corrected_mags[elem][j] > cutoff_mag:
+                corrected_mags[elem][j].insert(-1)
+    print(corrected_mags)
+    
+    #if -1 appears in corrected_mags more than 10 times:
+        #set all values in this model to -1
+        
+    return(corrected_mags)
+
+def make_chi_squared(mag_err, mag):
+    all_chi2 = []
+    for mags in mag_err:
+        chi2 = np.sum(np.square(mags - mag)/mag)
+        all_chi2.append(chi2)
+    return(all_chi2)
+
+def return_model(dictionary):
+    min_chi = min(dictionary.items(), key=lambda x : x[1])
+    lowest_chi = min(min_chi[1])
+    related_model = int(min_chi[0])
+    #print('Lowest value in dict:', min(min_chi[1]))
+    #print('Model with lowest value in dict:', min_chi[0])
+    return(min_chi, lowest_chi, related_model)
+   
+   
+   
+   
+#Load in models.
+
+lc = np.load('light_curves.npz')
+m0 = lc['two']
+m1 = lc['two_r']
+m2 = lc['two_b']
+m3 = lc['three']
+m4 = lc['three_b']
+m5 = lc['KW']
+m6 = lc['BR']
+m7 = lc['GW']
+
+#Define parameters.
+
+N = 10
+
+model = [m0, m1 ,m2 ,m3 ,m4 ,m5 ,m6 ,m7]
+time = [0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5]
+
+dist = np.random.uniform(40,200,N) #Mpc
+dist_all_models = 40 #Mpc
+low_dist_err = 0.7
+high_dist_err = 1.3
+
+#Simulating N kilonova models in the universe.
+
+array_kns = []
+all_kn_distance = []
+model_distance = []
+min_chi2 = []
+best_model = []
+ind_chi2 = []
+dist_ind_value = []
+
+
+
+
+
+for j in range(N):
+    
+    #Create kn in universe.
+    x = np.random.randint(0, 7)
+    gen_kn = make_lightcurve(time, x)
+    kn = make_scale_model(gen_kn, [dist[j]])
+    
+    #Record model of kn chosen.
+    array_kns.append(x)
+    
+    #Need to find which model matches the kn in universe.
+    
+    #Work out step of model over distance.
+    dist_range = np.arange(np.floor(low_dist_err*dist[j]), np.ceil(high_dist_err*dist[j]), 1)
+    
+    #Loop over all models.
+    chisquare_models = []
+    for i in range(len(model)):
+        magnitude = make_lightcurve(time, i)
+        scale = make_scale_model(magnitude, dist_range)
+        error = introduce_telescope_err(scale)
+        chisquare = make_chi_squared(error, kn)
+        chisquare_models.append(chisquare)
+
+    #Save chisquared data in dictionary.
+    chi_dict = {'0':chisquare_models[0], '1':chisquare_models[1], '2':chisquare_models[2], '3':chisquare_models[3], '4':chisquare_models[4], '5':chisquare_models[5], '6':chisquare_models[6], '7':chisquare_models[7]}
+    return_model(chi_dict)
+    
+    #Using return model function to find the min chi and best model fit for all the models over every iteration.
+    lowest_chi = return_model(chi_dict)[1]
+    related_model = return_model(chi_dict)[2]
+    min_chi2.append(lowest_chi)
+    best_model.append(related_model)
+    
+    #Finding the index of the minimum chi value to find out where the distance of the model is.
+    chi_index_min = np.argmin(chisquare_models[int(related_model)])
+    ind_chi2.append(chi_index_min)
+    dist_range_index = dist_range[int(chi_index_min)]
+    dist_ind_value.append(dist_range_index)
+    
+    #Looping over dist_all_models N times for kn_info dict.
+    all_kn_distance.append(int(dist[j]))
+    
+    
+    
+#Save KN, best fit model, min chi2 value, model distance (use indexing to find lowest) and KN distance)
+
+kn_info = {'KN model':array_kns, 'Best fit model':best_model, 'Minimum Chi2':min_chi2, 'Model distance':dist_ind_value, 'KN distance':all_kn_distance}
+print(kn_info)
+
+
+
+
+#Creating the efficiency curve.
+
+np.where(kn)
+
+#np.cumsum()
+
+#plt.plot(kn_info['KN distance'], )
+
+
+
+
+
+plt.figure(figsize=(9,7))
+plt.plot(dist_range, chi_dict['0'], color='black', label='Two Component Model')
+plt.plot(dist_range, chi_dict['1'], color='red', label='Red Two Component Model')
+plt.plot(dist_range, chi_dict['2'], color='blue', label='Blue Two Component Model')
+plt.plot(dist_range, chi_dict['3'], color='black', linestyle='dashed', label='Three Component Model')
+plt.plot(dist_range, chi_dict['4'], color='blue', linestyle='dashed', label='Blue Three Component Model')
+plt.plot(dist_range, chi_dict['5'], color='green', label='Kawaguchi et al.')
+plt.plot(dist_range, chi_dict['6'], color='orange', label='Barbieri et al.')
+plt.plot(dist_range, chi_dict['7'], color='fuchsia', label='GW170817')
+plt.xlabel('Distance (Mpc)')
+plt.ylabel('$\chi^{2}$')
+#plt.ylim(0,1)
+#plt.xlim(28,51)
+plt.grid()
+plt.legend()
+plt.savefig('chi_ehanced.png')
